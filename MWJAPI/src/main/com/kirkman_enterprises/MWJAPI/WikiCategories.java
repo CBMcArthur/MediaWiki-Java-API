@@ -43,11 +43,11 @@ public class WikiCategories {
 		boolean hasMore = false;
 		do {
 			if (!hasMore) { 
-				response = HttpQueries.sendGetQuery(query, client);
+				response = HttpRequest.sendGetQuery(query, client);
 				//System.out.println("Query: "+query);
 			} else {
 				String contValue = parseQueryContinue(response);
-				response = HttpQueries.sendGetQuery(query+"&cmcontinue="+contValue, client);
+				response = HttpRequest.sendGetQuery(query+"&cmcontinue="+contValue, client);
 				//System.out.println("Query: "+query+"&cmcontinue="+contValue);
 			}
 			//System.out.println(response);
