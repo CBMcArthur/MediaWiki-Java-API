@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,17 +27,18 @@ import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import com.kirkman_enterprises.MWJAPI.objects.EditParameters;
 
-
-public class PageContents {
+public class WikiPages {
 
 	private String userAgent = "MediaWikiBot (https://github.com/CBMcArthur/MediaWiki-Java-API)";
 	private String localStorage = System.getProperty("java.io.tmpdir");
 	private String baseUrl = "http://en.wikipedia.org/w/";
 	private String articleTitle;
+	private String editToken = null;
 	private CookieStore cookieStore;
 	
-	public PageContents(String articleTitle) {
+	public WikiPages(String articleTitle) {
 		this.articleTitle = articleTitle;
 		createCookie();
 	} // end constructor
@@ -52,6 +55,16 @@ public class PageContents {
 		this.baseUrl = baseUrl;
 	}
 	
+	public String getArticleTitle() {
+		return articleTitle;
+	}
+
+	public void setArticleTitle(String articleTitle) {
+		this.articleTitle = articleTitle;
+	}
+
+	// TODO This is not working at all.
+	// Also getting a warning "Invalid cookie header: Invalid 'expires' attribute" on all HTTP requests.
 	private void createCookie() {
 		String domain = baseUrl.substring(baseUrl.lastIndexOf('.', baseUrl.lastIndexOf('.')-1));
 		cookieStore = new BasicCookieStore();
@@ -70,8 +83,6 @@ public class PageContents {
 	 * @return String - The contents of the article, including any wiki markup.
 	 */
 	public String getPageContent() {
-		String pageContents = null;
-		
 		// Construct the query...
 		Map<String, String> queryParameters = new HashMap<String, String>();
 		queryParameters.put("action", "query");
@@ -79,6 +90,59 @@ public class PageContents {
 		queryParameters.put("prop", "revisions");
 		queryParameters.put("rvprop", "content");
 		queryParameters.put("titles", articleTitle);
+		
+		// Request page information and contents as XML
+		String pageContents = httpRequest(queryParameters);
+		
+		// Parse the XML and extract the page contents
+		pageContents = parseXML(pageContents, "rev", null);
+		
+		return pageContents;
+	}  // end getPageContent()
+	
+	public EditParameters getEditPage() {
+		EditParameters editParams = new EditParameters();
+		editParams.setArticleTitle(articleTitle);
+		
+		// Get the edit token if it hasn't been retrieved yet
+		if (editToken == null)
+			getEditToken();
+		editParams.setEditToken(editToken);
+		
+		// Get the current page information and set appropriate Edit Parameters
+		Map<String, String> queryParameters = new HashMap<String, String>();
+		queryParameters.put("action", "query");
+		queryParameters.put("format", "xml");
+		queryParameters.put("prop", "info|revisions");
+		queryParameters.put("rvprop", "timestamp|content");
+		queryParameters.put("titles", articleTitle);
+		String pageContents = httpRequest(queryParameters);
+		editParams.setContent(parseXML(pageContents, "rev", null));
+		editParams.setBaseTimeStamp(parseXML(pageContents, "rev", "timestamp"));
+		
+		// Set start time stamp as current time
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+		Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+		editParams.setStartTimeStamp(sdf.format(timestamp));
+		
+		return editParams;
+	}  // end getEditPage()
+	
+	private void getEditToken() {
+		if (editToken != null) return;
+		
+		// Construct the query...
+		Map<String, String> queryParameters = new HashMap<String, String>();
+		queryParameters.put("action", "query");
+		queryParameters.put("format", "xml");
+		queryParameters.put("meta", "tokens");
+		String tokenResponse = httpRequest(queryParameters);
+		editToken = parseXML(tokenResponse, "tokens", "csrftoken");
+		// System.out.println(editToken);
+	}
+	
+	private String httpRequest(Map<String, String> queryParameters) {
+		String pageContents; 
 		
 		String requestQuery = "api.php?";
 		try {
@@ -108,27 +172,8 @@ public class PageContents {
 			return null;
 		}
 		// System.out.println("Reponse content for "+articleTitle+" is: \n"+pageContents);
-		
-		try {
-			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-			DocumentBuilder builder = factory.newDocumentBuilder();
-			InputSource is = new InputSource(new StringReader(pageContents));
-			Document doc = builder.parse(is);
-			Node rev = doc.getElementsByTagName("rev").item(0);
-			pageContents = rev.getTextContent();
-		} catch (ParserConfigurationException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (SAXException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
 		return pageContents;
-	}  // end getPageContent()
+	}
 	
 	private String httpBuildQuery(Map<String, String> parameters) throws UnsupportedEncodingException {
 		String encodingType = "UTF-8";
@@ -144,69 +189,36 @@ public class PageContents {
 		return queryString;
 	}
 	
-//	public EditParameters getEditPage() throws HTTPException {
-//		EditParameters editParams = new EditParameters();
-//		
-//		String query = url+"api.php?action=query&format=xml";
-//		try {
-//			query += "&prop=info%7Crevisions&intoken=edit&titles="+URLEncoder.encode(articleTitle.replace(' ' , '_'), "UTF-8");
-//		} catch (UnsupportedEncodingException e1) {
-//			throw new HTTPException("The article title could not be encoded into a URL.");
-//		}
-//		query += "&rvprop=content%7Ctimestamp";
-//		
-//		String response = HttpRequest.sendGetQuery(query, client);
-//
-//		// DEBUG!!
-//		//System.out.println("Response for "+articleTitle+"\n"+response);
-//		
-//		try {
-//			// Setup XML helpers
-//			DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-//			DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-//			InputStream in = new ByteArrayInputStream(response.getBytes("UTF-8"));
-//			Reader reader = new InputStreamReader(in, "UTF-8"); 
-//			InputSource is = new InputSource(reader);
-//			is.setEncoding("UTF-8");
-//			Document doc = docBuilder.parse(is);
-//
-//			NamedNodeMap properties;
-//			Node propNode;
-//			
-//			// Parse out the XML
-//			NodeList pageList = doc.getElementsByTagName("page");
-//			Node page = pageList.item(0);
-//			properties = page.getAttributes();
-//			propNode = properties.getNamedItem("title");
-//			editParams.setArticleTitle(propNode.getNodeValue());
-//			propNode = properties.getNamedItem("starttimestamp");
-//			editParams.setStartTimeStamp(propNode.getNodeValue());
-//			propNode = properties.getNamedItem("edittoken");
-//			editParams.setEditToken(propNode.getNodeValue());
-//			
-//			propNode = properties.getNamedItem("missing");
-//			if (propNode == null) {
-//				NodeList revList = doc.getElementsByTagName("rev");
-//				Node rev = revList.item(0);
-//				editParams.setContent(rev.getTextContent());
-//				properties = rev.getAttributes();
-//				propNode = properties.getNamedItem("timestamp");
-//				editParams.setBaseTimeStamp(propNode.getNodeValue());
-//			} else {
-//				editParams.setContent("");
-//			}
-//		} catch (ParserConfigurationException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (SAXException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (IOException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		}
-//		return editParams;
-//	}  // end getEditPage()
+	private String parseXML(String xmlContent, String tagName, String attribute) {
+		String value;
+		// Parse the XML and extract the page contents
+		try {
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			InputSource is = new InputSource(new StringReader(xmlContent));
+			Document doc = builder.parse(is);
+			Node rev = doc.getElementsByTagName(tagName).item(0);
+			if (attribute == null) {
+				value = rev.getTextContent();
+			} else {
+				value = rev.getAttributes().getNamedItem(attribute).getNodeValue();
+			}
+		} catch (ParserConfigurationException e) {
+			System.err.println("Error configuring the XML parser...");
+			e.printStackTrace();
+			return null;
+		} catch (SAXException e) {
+			System.err.println("SAX Exception...");
+			e.printStackTrace();
+			return null;
+		} catch (IOException e) {
+			System.err.print("IO Exception...");
+			e.printStackTrace();
+			return null;
+		}
+		// System.out.println(value);
+		return value;
+	}
 	
 //	public String savePageEdit(EditParameters editParams) throws HTTPException {
 //		// Construct the query

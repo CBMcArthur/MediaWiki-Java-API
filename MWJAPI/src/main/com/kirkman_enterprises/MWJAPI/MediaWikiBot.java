@@ -1,5 +1,7 @@
 package com.kirkman_enterprises.MWJAPI;
 
+import com.kirkman_enterprises.MWJAPI.objects.EditParameters;
+
 public class MediaWikiBot {
 	
 	private String baseUrl;
@@ -69,7 +71,7 @@ public class MediaWikiBot {
 	 * @throws HTTPException
 	 */
 	public String getPageContent(String articleTitle) {
-		PageContents pageContent = new PageContents(articleTitle);
+		WikiPages pageContent = new WikiPages(articleTitle);
 		if (baseUrl != null)
 			pageContent.setBaseUrl(baseUrl);
 		if (localStorage != null)
@@ -87,6 +89,7 @@ public class MediaWikiBot {
 	 * @return boolean - Whether or not the login was successful.
 	 * @throws HTTPException
 	 */
+	// TODO MediaWiki prefers OAuth/Owner-only authentication.  Need to research.
 //	public boolean login(String username, String password) throws HTTPException {
 //		Login login = new Login(username, password, url, client, localStorage);
 //		return login.login();
@@ -98,12 +101,11 @@ public class MediaWikiBot {
 	 * 
 	 * @param articleTitle - The title of the article that is to be edited.
 	 * @return EditParameters - An object containing information about the article to be edited.
-	 * @throws HTTPException
 	 */
-//	public EditParameters getEditPage(String articleTitle) throws HTTPException {
-//		PageContents pageContent = new PageContents(articleTitle, url, client);
-//		return pageContent.getEditPage();
-//	}
+	public EditParameters getEditPage(String articleTitle) {
+		WikiPages pageContent = new WikiPages(articleTitle);
+		return pageContent.getEditPage();
+	}
 	
 	/**
 	 * This method should be called to save an edited article.  

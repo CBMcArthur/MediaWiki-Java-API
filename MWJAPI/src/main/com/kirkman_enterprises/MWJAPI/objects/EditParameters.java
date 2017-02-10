@@ -8,6 +8,7 @@ public class EditParameters {
 	private String baseTimeStamp;
 	private String startTimeStamp;
 	private String editSummary;
+	private int bot = 1;
 	
 	public String getArticleTitle() {
 		return articleTitle;
@@ -55,5 +56,17 @@ public class EditParameters {
 
 	public void setEditSummary(String editSummary) {
 		this.editSummary = editSummary;
+	}
+	
+	public String toString() {
+		String retString = "Edit Parameters:\n";
+		retString += "Article Title: "+articleTitle+"\n";
+		retString += "Edit Token: "+editToken+"\n";
+		retString += "Bot Flag: "+bot+"\n";
+		retString += "Base Timestamp: "+baseTimeStamp+"\n";
+		retString += "Start Timestamp: "+startTimeStamp+"\n";
+		retString += "Edit Summary: "+editSummary+"\n";
+		retString += "Article Content: "+content+"\n";
+		return retString;
 	}
 }
