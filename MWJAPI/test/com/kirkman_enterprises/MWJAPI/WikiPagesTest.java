@@ -32,5 +32,13 @@ public class WikiPagesTest {
 		Assert.assertNotNull(params.getStartTimeStamp());
 		Assert.assertNull(params.getEditSummary());
 	}
+	
+	@Test
+	public void testSaveEditPage() {
+		WikiPages saveEditPage = new WikiPages("Wikipedia:Sandbox");
+		EditParameters params = saveEditPage.getEditPage();
+		boolean success = saveEditPage.savePageEdit(params);
+		Assert.assertTrue(success);
+	}
 
 }

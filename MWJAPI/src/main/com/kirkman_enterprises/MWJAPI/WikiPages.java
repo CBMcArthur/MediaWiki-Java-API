@@ -6,7 +6,9 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -14,13 +16,18 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CookieStore;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.cookie.BasicClientCookie;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -29,11 +36,13 @@ import org.xml.sax.SAXException;
 
 import com.kirkman_enterprises.MWJAPI.objects.EditParameters;
 
+import sun.misc.IOUtils;
+
 public class WikiPages {
 
 	private String userAgent = "MediaWikiBot (https://github.com/CBMcArthur/MediaWiki-Java-API)";
 	private String localStorage = System.getProperty("java.io.tmpdir");
-	private String baseUrl = "http://en.wikipedia.org/w/";
+	private String baseUrl = "https://en.wikipedia.org/w/";
 	private String articleTitle;
 	private String editToken = null;
 	private CookieStore cookieStore;
@@ -84,15 +93,15 @@ public class WikiPages {
 	 */
 	public String getPageContent() {
 		// Construct the query...
-		Map<String, String> queryParameters = new HashMap<String, String>();
-		queryParameters.put("action", "query");
-		queryParameters.put("format", "xml");
-		queryParameters.put("prop", "revisions");
-		queryParameters.put("rvprop", "content");
-		queryParameters.put("titles", articleTitle);
+		List<NameValuePair> queryParameters = new ArrayList<NameValuePair>();
+		queryParameters.add(new BasicNameValuePair("action", "query"));
+		queryParameters.add(new BasicNameValuePair("format", "xml"));
+		queryParameters.add(new BasicNameValuePair("prop", "revisions"));
+		queryParameters.add(new BasicNameValuePair("rvprop", "content"));
+		queryParameters.add(new BasicNameValuePair("titles", articleTitle));
 		
 		// Request page information and contents as XML
-		String pageContents = httpRequest(queryParameters);
+		String pageContents = httpGetRequest(queryParameters);
 		
 		// Parse the XML and extract the page contents
 		pageContents = parseXML(pageContents, "rev", null);
@@ -100,6 +109,14 @@ public class WikiPages {
 		return pageContents;
 	}  // end getPageContent()
 	
+	/**
+	 * This function returns an object, EditParameters, that contains information needed to
+	 * make changes to an wiki-page.  When editing a wiki-page a call should be made to this
+	 * function first to retrieve the EditParameters, make changes to the content attribute
+	 * of the EditParameters, then a call made to savePageEdit().
+	 * 
+	 * @return EditParameters
+	 */
 	public EditParameters getEditPage() {
 		EditParameters editParams = new EditParameters();
 		editParams.setArticleTitle(articleTitle);
@@ -110,13 +127,13 @@ public class WikiPages {
 		editParams.setEditToken(editToken);
 		
 		// Get the current page information and set appropriate Edit Parameters
-		Map<String, String> queryParameters = new HashMap<String, String>();
-		queryParameters.put("action", "query");
-		queryParameters.put("format", "xml");
-		queryParameters.put("prop", "info|revisions");
-		queryParameters.put("rvprop", "timestamp|content");
-		queryParameters.put("titles", articleTitle);
-		String pageContents = httpRequest(queryParameters);
+		List<NameValuePair> queryParameters = new ArrayList<NameValuePair>();
+		queryParameters.add(new BasicNameValuePair("action", "query"));
+		queryParameters.add(new BasicNameValuePair("format", "xml"));
+		queryParameters.add(new BasicNameValuePair("prop", "info|revisions"));
+		queryParameters.add(new BasicNameValuePair("rvprop", "timestamp|content"));
+		queryParameters.add(new BasicNameValuePair("titles", articleTitle));
+		String pageContents = httpGetRequest(queryParameters);
 		editParams.setContent(parseXML(pageContents, "rev", null));
 		editParams.setBaseTimeStamp(parseXML(pageContents, "rev", "timestamp"));
 		
@@ -128,28 +145,55 @@ public class WikiPages {
 		return editParams;
 	}  // end getEditPage()
 	
+	public boolean savePageEdit(EditParameters editParams) {
+		if (editParams == null || editParams.getEditToken() == null) {
+			System.err.println("Edit Parameters have not been initialized. Please use getEditPage() first.");
+			return false;
+		}
+		
+		List<NameValuePair> queryParameters = new ArrayList<NameValuePair>();
+		queryParameters.add(new BasicNameValuePair("action", "edit"));
+		queryParameters.add(new BasicNameValuePair("format", "xml"));
+		queryParameters.add(new BasicNameValuePair("title", editParams.getArticleTitle()));
+		queryParameters.add(new BasicNameValuePair("summary", editParams.getEditSummary()));
+		queryParameters.add(new BasicNameValuePair("bot", Integer.toString(editParams.getBotFlag())));
+		queryParameters.add(new BasicNameValuePair("basetimestamp", editParams.getBaseTimeStamp()));
+		queryParameters.add(new BasicNameValuePair("starttimestamp", editParams.getStartTimeStamp()));
+		queryParameters.add(new BasicNameValuePair("text", editParams.getContent()));
+		queryParameters.add(new BasicNameValuePair("token", editParams.getEditToken()));
+		
+		String response = httpPostRequest(queryParameters);
+		//System.out.println(response);
+		String result = parseXML(response, "edit", "result");
+		
+		if (result.equals("Success"))
+			return true;
+		else
+			return false;
+	}  // end savePageEdit()
+	
 	private void getEditToken() {
 		if (editToken != null) return;
 		
 		// Construct the query...
-		Map<String, String> queryParameters = new HashMap<String, String>();
-		queryParameters.put("action", "query");
-		queryParameters.put("format", "xml");
-		queryParameters.put("meta", "tokens");
-		String tokenResponse = httpRequest(queryParameters);
+		List<NameValuePair> queryParameters = new ArrayList<NameValuePair>();
+		queryParameters.add(new BasicNameValuePair("action", "query"));
+		queryParameters.add(new BasicNameValuePair("format", "xml"));
+		queryParameters.add(new BasicNameValuePair("meta", "tokens"));
+		String tokenResponse = httpGetRequest(queryParameters);
 		editToken = parseXML(tokenResponse, "tokens", "csrftoken");
 		// System.out.println(editToken);
 	}
 	
-	private String httpRequest(Map<String, String> queryParameters) {
+	private String httpGetRequest(List<NameValuePair> queryParameters) {
 		String pageContents; 
 		
 		String requestQuery = "api.php?";
 		try {
 			requestQuery += httpBuildQuery(queryParameters);
 		} catch (UnsupportedEncodingException e1) {
-			System.err.println("One or more query parameters could not be encoded; most likely the Article title.");
-			System.exit(-1);
+			System.err.println("One or more query parameters could not be encoded");
+			return null;
 		}
 		// System.out.println(requestQuery);
 
@@ -171,19 +215,54 @@ public class WikiPages {
 			e.printStackTrace();
 			return null;
 		}
-		// System.out.println("Reponse content for "+articleTitle+" is: \n"+pageContents);
+		// System.out.println("Response content for "+articleTitle+" is: \n"+pageContents);
 		return pageContents;
 	}
 	
-	private String httpBuildQuery(Map<String, String> parameters) throws UnsupportedEncodingException {
+	private String httpPostRequest(List<NameValuePair> queryParameters) {
+		String responseContents;
+		
+		// Make the POST request...
+		HttpClientBuilder client = HttpClientBuilder.create();
+		client.setUserAgent(userAgent);
+		client.setDefaultCookieStore(cookieStore);
+		CloseableHttpClient cclient = client.build();
+		HttpPost postRequest = new HttpPost(baseUrl+"api.php");
+		postRequest.setHeader("Content_Type", "application/x-www-form-urlencoded");
+		try {
+			postRequest.setEntity(new UrlEncodedFormEntity(queryParameters));
+		} catch (UnsupportedEncodingException e) {
+			System.err.println("One or more query parameters could not be encoded");
+			e.printStackTrace();
+			return null;
+		}
+		
+		CloseableHttpResponse response;
+		HttpEntity entity;
+		try {
+			response = cclient.execute(postRequest);
+			entity = response.getEntity();
+			responseContents = EntityUtils.toString(entity);
+			response.close();
+		} catch (IOException e) {
+			System.out.println("IO Exception occurred....");
+			e.printStackTrace();
+			return null;
+		}
+		// System.out.println(responseContents);
+		
+		return responseContents;
+	}
+	
+	private String httpBuildQuery(List<NameValuePair> queryParameters) throws UnsupportedEncodingException {
 		String encodingType = "UTF-8";
 		String queryString = null;
 		
-		for (Map.Entry<String, String> entry : parameters.entrySet()) {
+		for (NameValuePair param : queryParameters) {
 			if (queryString == null)
-				queryString = URLEncoder.encode(entry.getKey(), encodingType)+"="+URLEncoder.encode(entry.getValue(), encodingType);
+				queryString = URLEncoder.encode(param.getName(), encodingType)+"="+URLEncoder.encode(param.getValue(), encodingType);
 			else
-				queryString += "&"+URLEncoder.encode(entry.getKey(), encodingType)+"="+URLEncoder.encode(entry.getValue(), encodingType);
+				queryString += "&"+URLEncoder.encode(param.getName(), encodingType)+"="+URLEncoder.encode(param.getValue(), encodingType);
 		}
 		
 		return queryString;
@@ -219,67 +298,6 @@ public class WikiPages {
 		// System.out.println(value);
 		return value;
 	}
-	
-//	public String savePageEdit(EditParameters editParams) throws HTTPException {
-//		// Construct the query
-//		String newURL = url+"api.php";
-//
-//		List<NameValuePair> postParams = new ArrayList<NameValuePair>();
-//		postParams.add(new BasicNameValuePair("action", "edit"));
-//		postParams.add(new BasicNameValuePair("format", "xml"));
-//		postParams.add(new BasicNameValuePair("title", editParams.getArticleTitle()));
-//		postParams.add(new BasicNameValuePair("summary", editParams.getEditSummary()));
-//		postParams.add(new BasicNameValuePair("bot", "true"));
-//		postParams.add(new BasicNameValuePair("basetimestamp", editParams.getBaseTimeStamp()));
-//		postParams.add(new BasicNameValuePair("starttimestamp", editParams.getStartTimeStamp()));
-//		postParams.add(new BasicNameValuePair("text", editParams.getContent()));
-//		postParams.add(new BasicNameValuePair("token", editParams.getEditToken()));
-//		String response = HttpRequest.sendPostQuery(newURL, postParams, true, client);
-//		
-//		// Lets check the response to make sure the edit is successful
-//		try {
-//			// Setup XML helpers
-//			DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-//			DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-//			InputStream in = new ByteArrayInputStream(response.getBytes());
-//			Reader reader = new InputStreamReader(in, "UTF-8");
-//			InputSource is = new InputSource(reader);
-//			is.setEncoding("UTF-8");
-//			Document doc = docBuilder.parse(is);
-//
-//			// Parse out the XML
-//			NodeList nodeList = doc.getElementsByTagName("edit");
-//			if (nodeList == null || nodeList.getLength() == 0) {
-//				System.err.println("The edit response lacked an edit tag.  Printing the response: ");
-//				System.err.println(response);
-//				return "Edit error";
-//			}
-//			Node node = nodeList.item(0);
-//			NamedNodeMap nodeProps = node.getAttributes();
-//			Node propNode = nodeProps.getNamedItem("result");
-//			if (propNode.getNodeValue().equalsIgnoreCase("Success"))
-//				return "Success";
-//			else {
-//				// get the error code
-//				nodeList = doc.getElementsByTagName("error");
-//				node = nodeList.item(0);
-//				nodeProps = node.getAttributes();
-//				propNode = nodeProps.getNamedItem("code");
-//				return propNode.getNodeValue();
-//			}
-//		} catch (ParserConfigurationException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (SAXException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (IOException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		}
-//
-//		return "Unknown Error";
-//	}  // end savePageEdit()
 	
 //	public boolean isRedirected() {
 //		String query = url+"api.php?action=query&format=xml";

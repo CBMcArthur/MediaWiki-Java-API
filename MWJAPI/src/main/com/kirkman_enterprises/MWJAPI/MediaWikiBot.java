@@ -98,13 +98,15 @@ public class MediaWikiBot {
 	/**
 	 * This method should be used if the bot/program will be editing a particular article.  It returns
 	 * an object containing the article's page contents and other variables needed for editing an article.
+	 * This object includes a 'content' attribute containing the wiki-page's contents which you are 
+	 * attempting to edit.
 	 * 
 	 * @param articleTitle - The title of the article that is to be edited.
 	 * @return EditParameters - An object containing information about the article to be edited.
 	 */
 	public EditParameters getEditPage(String articleTitle) {
-		WikiPages pageContent = new WikiPages(articleTitle);
-		return pageContent.getEditPage();
+		WikiPages editPage = new WikiPages(articleTitle);
+		return editPage.getEditPage();
 	}
 	
 	/**
