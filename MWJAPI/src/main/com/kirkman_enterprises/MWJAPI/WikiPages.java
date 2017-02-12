@@ -7,9 +7,7 @@ import java.net.URLEncoder;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -17,7 +15,6 @@ import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -34,10 +31,6 @@ import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-import com.kirkman_enterprises.MWJAPI.objects.EditParameters;
-
-import sun.misc.IOUtils;
-
 public class WikiPages {
 
 	private String userAgent = "MediaWikiBot (https://github.com/CBMcArthur/MediaWiki-Java-API)";
@@ -49,7 +42,7 @@ public class WikiPages {
 	
 	public WikiPages(String articleTitle) {
 		this.articleTitle = articleTitle;
-		createCookie();
+		// createCookie();
 	} // end constructor
 	
 	public void setUserAgent(String userAgent) {
@@ -70,18 +63,6 @@ public class WikiPages {
 
 	public void setArticleTitle(String articleTitle) {
 		this.articleTitle = articleTitle;
-	}
-
-	// TODO This is not working at all.
-	// Also getting a warning "Invalid cookie header: Invalid 'expires' attribute" on all HTTP requests.
-	private void createCookie() {
-		String domain = baseUrl.substring(baseUrl.lastIndexOf('.', baseUrl.lastIndexOf('.')-1));
-		cookieStore = new BasicCookieStore();
-		BasicClientCookie cookie = new BasicClientCookie("name", "value");
-		cookie.setDomain(domain);
-		cookie.setPath("/");
-		cookieStore.addCookie(cookie);
-		return;
 	}
 
 	/**
@@ -171,6 +152,19 @@ public class WikiPages {
 		else
 			return false;
 	}  // end savePageEdit()
+	
+
+	// TODO This is not working at all.
+	// Also getting a warning "Invalid cookie header: Invalid 'expires' attribute" on all HTTP requests.
+	private void createCookie() {
+		String domain = baseUrl.substring(baseUrl.lastIndexOf('.', baseUrl.lastIndexOf('.')-1));
+		cookieStore = new BasicCookieStore();
+		BasicClientCookie cookie = new BasicClientCookie("name", "value");
+		cookie.setDomain(domain);
+		cookie.setPath("/");
+		cookieStore.addCookie(cookie);
+		return;
+	}
 	
 	private void getEditToken() {
 		if (editToken != null) return;
@@ -294,104 +288,12 @@ public class WikiPages {
 			System.err.print("IO Exception...");
 			e.printStackTrace();
 			return null;
+		} catch (NullPointerException e) {
+			System.err.println("Unable to find specified tag and/or attribute");
+			return null;
 		}
 		// System.out.println(value);
 		return value;
 	}
 	
-//	public boolean isRedirected() {
-//		String query = url+"api.php?action=query&format=xml";
-//		try {
-//			query += "&redirects&titles="+URLEncoder.encode(articleTitle.replace(' ' , '_'), "UTF-8");
-//		} catch (UnsupportedEncodingException e1) {
-//			return false;
-//		}
-//		
-//		String response;
-//		try {
-//			response = HttpRequest.sendGetQuery(query, client);
-//		} catch (HTTPException e) {
-//			return false;
-//		}
-//
-//		try {
-//			// Setup XML helpers
-//			DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-//			DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-//			InputStream in = new ByteArrayInputStream(response.getBytes());
-//			Reader reader = new InputStreamReader(in, "UTF-8");
-//			InputSource is = new InputSource(reader);
-//			is.setEncoding("UTF-8");
-//			Document doc = docBuilder.parse(is);
-//
-//			// Parse out the XML
-//			NodeList redirectList = doc.getElementsByTagName("r");
-//			Node redirect = redirectList.item(0);
-//			if (redirect == null) {
-//				return false;
-//			} else {
-//				return true;
-//			}
-//		} catch (ParserConfigurationException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (SAXException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (IOException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		}
-//		return false;
-//	}  // end isRedirected()
-	
-//	public String getRedirectName() {
-//		String redirectName = "";
-//		String query = url+"api.php?action=query&format=xml";
-//		try {
-//			query += "&redirects&titles="+URLEncoder.encode(articleTitle.replace(' ' , '_'), "UTF-8");
-//		} catch (UnsupportedEncodingException e1) {
-//			return redirectName;
-//		}
-//		
-//		String response;
-//		try {
-//			response = HttpRequest.sendGetQuery(query, client);
-//		} catch (HTTPException e) {
-//			return redirectName;
-//		}
-//
-//		try {
-//			// Setup XML helpers
-//			DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-//			DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-//			InputStream in = new ByteArrayInputStream(response.getBytes());
-//			Reader reader = new InputStreamReader(in, "UTF-8");
-//			InputSource is = new InputSource(reader);
-//			is.setEncoding("UTF-8");
-//			Document doc = docBuilder.parse(is);
-//
-//			// Parse out the XML
-//			NodeList redirectList = doc.getElementsByTagName("r");
-//			Node redirect = redirectList.item(0);
-//			if (redirect == null) {
-//				return redirectName;
-//			} else {
-//				NamedNodeMap attributes = redirect.getAttributes();
-//				Node toAttrib = attributes.getNamedItem("to");
-//				redirectName = toAttrib.getNodeValue();
-//				return redirectName;
-//			}
-//		} catch (ParserConfigurationException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (SAXException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		} catch (IOException e) {
-//			System.err.println("An error occurred parsing the server response.");
-//			e.printStackTrace();
-//		}
-//		return redirectName;
-//	}
 }

@@ -1,4 +1,4 @@
-package com.kirkman_enterprises.MWJAPI.objects;
+package com.kirkman_enterprises.MWJAPI;
 
 public class EditParameters {
 
